@@ -1,100 +1,93 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
+import Customize from './components/Customize.vue'
+import PauseMenu from './components/PauseMenu.vue'
 import GameOver from './components/GameOver.vue'
 import Hud from './components/Hud.vue'
-import LevelUp from './components/LevelUp.vue'
+import LevelClear from './components/LevelClear.vue'
+import MapSelect from './components/MapSelect.vue'
 import StartScreen from './components/StartScreen.vue'
-import { LumenEngine } from './game/engine'
-import { loadScores, saveScore } from './game/scores'
-import type { HudState, RunStats, ScoreRow, UpgradeDef } from './game/types'
+import WinScreen from './components/WinScreen.vue'
+import { WorldEngine } from './game/engine'
+import { loadSave, saveSkin } from './game/save'
+import type { Skin } from './game/skins'
+import type { ClearStats, HudState } from './game/types'
 
-type Screen = 'menu' | 'play' | 'upgrade' | 'over'
+type Screen = 'menu' | 'maps' | 'looks' | 'game' | 'clear' | 'over' | 'win'
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const screen = ref<Screen>('menu')
 const showHelp = ref(false)
-const showScores = ref(false)
 const hint = ref(true)
-const waveText = ref('')
-const choices = ref<UpgradeDef[]>([])
-const stats = ref<RunStats | null>(null)
-const ranks = ref<ScoreRow[]>(loadScores())
+const pauseOpen = ref(false)
+const finalScore = ref(0)
+const clearStats = ref<ClearStats | null>(null)
+const skin = ref<Skin>({ ...loadSave().skin })
 const hud = ref<HudState>({
-  hp: 100,
-  maxHp: 100,
-  xp: 0,
-  xpNeed: 26,
-  level: 1,
+  mode: 'map',
+  coins: 0,
+  lives: 5,
   score: 0,
-  combo: 1,
-  wave: 1,
   time: 0,
-  kills: 0,
+  levelName: '',
   muted: false,
   paused: false,
+  mapName: 'Aurora',
+  canEnter: false,
 })
 
-let engine: LumenEngine | null = null
+let engine: WorldEngine | null = null
 let hintTimer = 0
-let waveTimer = 0
-
-const playing = computed(() => screen.value === 'play' || screen.value === 'upgrade' || screen.value === 'over')
 
 function boot() {
   const canvas = canvasRef.value
   if (!canvas) return
   engine?.stop()
-  engine = new LumenEngine(canvas, {
+  engine = new WorldEngine(canvas, {
     onHud: (next) => {
       hud.value = next
     },
-    onLevelUp: (next) => {
-      choices.value = next
-      screen.value = 'upgrade'
+    onClear: (stats) => {
+      clearStats.value = stats
+      screen.value = 'clear'
     },
-    onGameOver: (run) => {
-      stats.value = run
-      ranks.value = saveScore({
-        score: run.score,
-        kills: run.kills,
-        wave: run.wave,
-        time: run.time,
-        date: new Date().toISOString(),
-      })
+    onGameOver: (score) => {
+      finalScore.value = score
       screen.value = 'over'
     },
-    onWave: (wave) => {
-      waveText.value = `onda ${wave}`
-      window.clearTimeout(waveTimer)
-      waveTimer = window.setTimeout(() => {
-        waveText.value = ''
-      }, 1600)
+    onWin: (score) => {
+      finalScore.value = score
+      screen.value = 'win'
     },
   })
+  engine.setSkin(skin.value)
 }
 
-async function preview() {
-  await nextTick()
-  boot()
-  if (!engine) return
-  engine.attract = true
-  engine.start()
+function openMaps() {
+  if (!engine) boot()
+  engine?.setSkin(skin.value)
+  engine?.start()
+  screen.value = 'maps'
 }
 
-function play() {
-  boot()
-  screen.value = 'play'
+function playLevel(index: number) {
+  if (!engine) boot()
+  engine?.setSkin(skin.value)
+  engine?.enterLevel(index)
+  engine?.start()
+  pauseOpen.value = false
+  screen.value = 'game'
   hint.value = true
   window.clearTimeout(hintTimer)
   hintTimer = window.setTimeout(() => {
     hint.value = false
-  }, 4200)
-  engine?.start()
+  }, 5000)
 }
 
-function pick(upgrade: UpgradeDef) {
-  engine?.applyUpgrade(upgrade)
-  screen.value = 'play'
+function updateSkin(next: Skin) {
+  skin.value = next
+  saveSkin(next)
+  engine?.setSkin(next)
 }
 
 function toggleMute() {
@@ -103,17 +96,48 @@ function toggleMute() {
   hud.value = { ...hud.value, muted: engine.muted }
 }
 
-function togglePause() {
-  if (!engine || screen.value !== 'play') return
-  engine.paused = !engine.paused
-  hud.value = { ...hud.value, paused: engine.paused }
+function openPause() {
+  if (screen.value !== 'game' || hud.value.mode !== 'level') return
+  pauseOpen.value = true
+  if (engine) {
+    engine.paused = true
+    hud.value = { ...hud.value, paused: true }
+  }
+}
+
+function resume() {
+  pauseOpen.value = false
+  if (engine) {
+    engine.paused = false
+    hud.value = { ...hud.value, paused: false }
+  }
+}
+
+function restartLevel() {
+  pauseOpen.value = false
+  engine?.restartLevel()
+  if (engine) {
+    engine.paused = false
+    hud.value = { ...hud.value, paused: false }
+  }
+}
+
+function toStartMenu() {
+  pauseOpen.value = false
+  engine?.leaveLevel()
+  screen.value = 'menu'
+}
+
+function hold(action: 'left' | 'right' | 'jump' | 'run' | 'enter', down: boolean) {
+  engine?.input.setVirtual(action, down)
 }
 
 function onKey(event: KeyboardEvent) {
   if (event.code === 'KeyM') toggleMute()
-  if (event.code === 'Space' || event.code === 'Escape') {
+  if (event.code === 'Escape') {
     event.preventDefault()
-    togglePause()
+    if (pauseOpen.value) resume()
+    else openPause()
   }
 }
 
@@ -124,14 +148,14 @@ function onResize() {
 onMounted(() => {
   window.addEventListener('keydown', onKey)
   window.addEventListener('resize', onResize)
-  void preview()
+  boot()
+  engine?.start()
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)
   window.removeEventListener('resize', onResize)
   window.clearTimeout(hintTimer)
-  window.clearTimeout(waveTimer)
   engine?.stop()
 })
 </script>
@@ -142,26 +166,23 @@ onBeforeUnmount(() => {
     <StartScreen
       v-if="screen === 'menu'"
       :show-help="showHelp"
-      :show-scores="showScores"
-      @play="play"
+      @play="openMaps"
+      @looks="screen = 'looks'"
       @help="showHelp = !showHelp"
-      @scores="showScores = !showScores"
     />
+    <MapSelect v-if="screen === 'maps'" @pick="playLevel" @back="screen = 'menu'" />
+    <Customize v-if="screen === 'looks'" :skin="skin" @update="updateSkin" @back="screen = 'menu'" />
     <Hud
-      v-if="playing && screen !== 'over'"
+      v-if="screen === 'game' || screen === 'clear'"
       :hud="hud"
       :hint="hint"
       @mute="toggleMute"
-      @pause="togglePause"
+      @menu="openPause"
+      @hold="hold"
     />
-    <div v-if="waveText && screen === 'play'" class="wave-banner">{{ waveText }}</div>
-    <LevelUp v-if="screen === 'upgrade'" :choices="choices" @pick="pick" />
-    <GameOver
-      v-if="screen === 'over' && stats"
-      :stats="stats"
-      :ranks="ranks"
-      @again="play"
-      @menu="screen = 'menu'; void preview()"
-    />
+    <PauseMenu v-if="pauseOpen && screen === 'game'" @resume="resume" @restart="restartLevel" @menu="toStartMenu" />
+    <LevelClear v-if="screen === 'clear' && clearStats" :stats="clearStats" @next="openMaps" />
+    <GameOver v-if="screen === 'over'" :score="finalScore" @again="openMaps" @menu="screen = 'menu'" />
+    <WinScreen v-if="screen === 'win'" :score="finalScore" @menu="screen = 'menu'" />
   </div>
 </template>

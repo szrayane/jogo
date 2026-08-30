@@ -1,19 +1,30 @@
-# Lúmen
+# Aurora World
 
-Arcade de sobrevivência no browser. Você é uma faísca. A aura ataca sozinha. Sombras vêm em ondas. Cada nível muda a run.
+Platformer 2D no espírito de **Super Mario World**: mapa-mundo, pulo com altura variável, moedas, blocos, inimigos que tomam stomp e um castelo no fim.
 
-Feito para portfólio e processo seletivo: dá para jogar em 10 segundos, funciona no celular e sobe na Vercel sem backend.
+É um jogo **original**. Não usa personagem, música, fase nem asset da Nintendo — só o gênero que todo mundo reconhece.
+
+Feito para portfólio e processo seletivo: joga no browser, funciona no celular, sobe na Vercel.
 
 **Stack:** Vue 3 · TypeScript · Vite · Canvas 2D · Web Audio · localStorage
 
 ## Como jogar
 
-- **Mover:** WASD, setas ou arrastar o dedo
-- **Atacar:** automático — a aura pulsa e os satélites orbitam
-- **Evoluir:** pegue fragmentos azuis, escolha um eco
-- **Pausar / som:** Espaço e `M`
+- **Andar:** setas ou A/D
+- **Pular:** Espaço, K, Z ou seta para cima — solte cedo para pular baixo
+- **Correr:** Shift, J ou X
+- **Mapa:** esquerda/direita escolhe a fase, Enter entra
+- **Celular:** teclas A/B e setas na tela
+- **M** silencia · **Esc** pausa
 
-Sobreviva o máximo que puder. O recorde fica salvo neste navegador.
+Pise nas **bolotas** por cima. Blocos `?` soltam moedas ou a **fruta** (um hit extra). 100 moedas = 1 vida. Chegue na estrela.
+
+Mundos:
+
+1. Bosque Rosa
+2. Pico Gelado
+3. Baía Aurora
+4. Centro Neon
 
 ## Rodar local
 
@@ -22,8 +33,6 @@ npm install
 npm run dev
 ```
 
-Build de produção:
-
 ```bash
 npm run build
 npm run preview
@@ -31,37 +40,26 @@ npm run preview
 
 ## Deploy na Vercel
 
-1. Entre em [vercel.com](https://vercel.com) e importe [este repositório](https://github.com/szrayane/jogo)
-2. Framework: **Vite** (detecta sozinho)
-3. Build: `npm run build` · pasta: `dist`
-
-Ou no terminal, com a CLI da Vercel:
-
-```bash
-npx vercel
-```
-
-O `vercel.json` já trata a SPA.
+Importe [este repositório](https://github.com/szrayane/jogo). Framework **Vite**, build `npm run build`, pasta `dist`.
 
 ## O que o projeto mostra
 
-- **Vue 3 Composition API** com telas (menu, run, level-up, game over)
-- **TypeScript** no loop do jogo, entidades e upgrades
-- **Game loop** com `requestAnimationFrame`, colisão círculo-círculo e partículas
-- **Roguelite curto:** 10 ecos diferentes, combo, ondas e 4 tipos de inimigo
-- **Mobile:** pointer capture + HUD tocável
-- **Som sem assets:** osciladores no Web Audio API
-- **Deploy estático** pronto para Vercel, no mesmo fluxo do portfólio
+- Física de platformer (coyote time, jump buffer, pulo cortado, plataformas one-way)
+- Tilemap, câmera, colisão AABB e entidades
+- Overworld com progresso salvo
+- Vue 3 na HUD/telas + loop em TypeScript
+- Controles touch e teclado
+- Deploy estático
 
 Arquitetura em `src/game`:
 
 | arquivo | papel |
 | --- | --- |
-| `engine.ts` | loop, combate, spawn, render |
-| `input.ts` | teclado e pointer |
-| `upgrades.ts` | player e ecos |
+| `engine.ts` | loop, física, combate, render |
+| `levels.ts` | mapa-mundo e as 3 fases |
+| `input.ts` | teclado e virtual pad |
 | `audio.ts` | SFX sintético |
-| `scores.ts` | top 5 no `localStorage` |
+| `save.ts` | fases liberadas |
 
 ## Autora
 

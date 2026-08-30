@@ -1,55 +1,64 @@
-export type EnemyKind = 'shade' | 'wraith' | 'brute' | 'seeker'
+import type { Skin } from './skins'
 
-export interface Vec {
-  x: number
-  y: number
-}
+export const VW = 320
+export const VH = 180
+export const TILE = 16
+
+export type Theme = 'forest' | 'ice' | 'water' | 'city'
+export type Mode = 'map' | 'level'
 
 export interface Player {
   x: number
   y: number
-  r: number
+  w: number
+  h: number
   vx: number
   vy: number
-  speed: number
-  hp: number
-  maxHp: number
-  regen: number
-  aura: number
-  pulseCd: number
-  pulseMax: number
-  pulseDmg: number
-  crit: number
-  magnet: number
-  veil: number
-  satellites: number
-  xp: number
-  level: number
-  xpNeed: number
+  facing: 1 | -1
+  grounded: boolean
+  big: boolean
+  invuln: number
+  coyote: number
+  jumpBuf: number
+  jumping: boolean
+  airJumps: number
+  dead: boolean
+  win: number
 }
 
-export interface Enemy {
-  id: number
-  kind: EnemyKind
+export interface Walker {
   x: number
   y: number
-  r: number
-  hp: number
-  maxHp: number
-  speed: number
-  dmg: number
-  xp: number
-  hitCd: number
-  hue: number
+  w: number
+  h: number
+  dir: 1 | -1
+  alive: boolean
+  squash: number
 }
 
-export interface Gem {
+export interface Item {
   x: number
   y: number
+  w: number
+  h: number
   vx: number
   vy: number
-  value: number
-  life: number
+  kind: 'fruit'
+}
+
+export interface Coin {
+  x: number
+  y: number
+  taken: boolean
+  pop: number
+}
+
+export interface Block {
+  tx: number
+  ty: number
+  kind: '?' | '!' | 'B'
+  used: boolean
+  bump: number
 }
 
 export interface Particle {
@@ -59,64 +68,46 @@ export interface Particle {
   vy: number
   life: number
   max: number
+  color: string
   size: number
-  color: string
 }
 
-export interface Floater {
-  x: number
-  y: number
-  text: string
-  life: number
-  color: string
-}
-
-export interface Satellite {
-  angle: number
-  radius: number
+export interface LevelDef {
+  id: string
+  name: string
+  theme: Theme
+  blurb: string
+  time: number
+  map: string[]
 }
 
 export interface HudState {
-  hp: number
-  maxHp: number
-  xp: number
-  xpNeed: number
-  level: number
+  mode: Mode
+  coins: number
+  lives: number
   score: number
-  combo: number
-  wave: number
   time: number
-  kills: number
+  levelName: string
   muted: boolean
   paused: boolean
+  mapName: string
+  canEnter: boolean
 }
 
-export interface RunStats {
+export interface ClearStats {
+  levelId: string
+  levelName: string
+  coins: number
   score: number
-  kills: number
-  wave: number
-  time: number
-  level: number
-}
-
-export interface ScoreRow {
-  score: number
-  kills: number
-  wave: number
-  time: number
-  date: string
-}
-
-export interface UpgradeDef {
-  id: string
-  name: string
-  desc: string
-  apply: (player: Player) => void
+  timeLeft: number
+  last: boolean
 }
 
 export interface EngineHooks {
   onHud: (hud: HudState) => void
-  onLevelUp: (choices: UpgradeDef[]) => void
-  onGameOver: (stats: RunStats) => void
-  onWave: (wave: number) => void
+  onClear: (stats: ClearStats) => void
+  onGameOver: (score: number) => void
+  onWin: (score: number) => void
 }
+
+export type { Skin }

@@ -1,40 +1,46 @@
 export class Input {
-  readonly keys = new Set<string>()
-  pointer = { active: false, x: 0, y: 0 }
-  private canvas: HTMLCanvasElement | null = null
+  left = false
+  right = false
+  jump = false
+  run = false
+  enter = false
+  jumpHeld = false
+  private jumpWas = false
+  private enterWas = false
+  private keys = new Set<string>()
+  private virt = { left: false, right: false, jump: false, run: false, enter: false }
 
-  attach(canvas: HTMLCanvasElement) {
-    this.canvas = canvas
+  attach() {
     window.addEventListener('keydown', this.onKeyDown)
     window.addEventListener('keyup', this.onKeyUp)
-    canvas.addEventListener('pointerdown', this.onPointerDown)
-    window.addEventListener('pointermove', this.onPointerMove)
-    window.addEventListener('pointerup', this.onPointerUp)
-    window.addEventListener('pointercancel', this.onPointerUp)
   }
 
   detach() {
     window.removeEventListener('keydown', this.onKeyDown)
     window.removeEventListener('keyup', this.onKeyUp)
-    this.canvas?.removeEventListener('pointerdown', this.onPointerDown)
-    window.removeEventListener('pointermove', this.onPointerMove)
-    window.removeEventListener('pointerup', this.onPointerUp)
-    window.removeEventListener('pointercancel', this.onPointerUp)
-    this.canvas = null
     this.keys.clear()
-    this.pointer.active = false
   }
 
-  axis(): { x: number; y: number } {
-    let x = 0
-    let y = 0
-    if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) x -= 1
-    if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) x += 1
-    if (this.keys.has('KeyW') || this.keys.has('ArrowUp')) y -= 1
-    if (this.keys.has('KeyS') || this.keys.has('ArrowDown')) y += 1
-    const len = Math.hypot(x, y)
-    if (len > 0) return { x: x / len, y: y / len }
-    return { x: 0, y: 0 }
+  setVirtual(action: 'left' | 'right' | 'jump' | 'run' | 'enter', down: boolean) {
+    this.virt[action] = down
+  }
+
+  beginFrame() {
+    const left = this.has('ArrowLeft', 'KeyA') || this.virt.left
+    const right = this.has('ArrowRight', 'KeyD') || this.virt.right
+    this.left = left && !right
+    this.right = right && !left
+    this.run = this.has('ShiftLeft', 'ShiftRight', 'KeyJ', 'KeyX') || this.virt.run
+    this.jumpHeld = this.has('Space', 'KeyK', 'KeyZ', 'ArrowUp') || this.virt.jump
+    this.jump = this.jumpHeld && !this.jumpWas
+    this.jumpWas = this.jumpHeld
+    const enterHeld = this.has('Enter', 'KeyE') || this.virt.enter
+    this.enter = enterHeld && !this.enterWas
+    this.enterWas = enterHeld
+  }
+
+  private has(...codes: string[]) {
+    return codes.some((code) => this.keys.has(code))
   }
 
   private onKeyDown = (event: KeyboardEvent) => {
@@ -46,27 +52,5 @@ export class Input {
 
   private onKeyUp = (event: KeyboardEvent) => {
     this.keys.delete(event.code)
-  }
-
-  private toLocal(event: PointerEvent) {
-    if (!this.canvas) return
-    const rect = this.canvas.getBoundingClientRect()
-    this.pointer.x = event.clientX - rect.left
-    this.pointer.y = event.clientY - rect.top
-  }
-
-  private onPointerDown = (event: PointerEvent) => {
-    this.canvas?.setPointerCapture(event.pointerId)
-    this.pointer.active = true
-    this.toLocal(event)
-  }
-
-  private onPointerMove = (event: PointerEvent) => {
-    if (!this.pointer.active) return
-    this.toLocal(event)
-  }
-
-  private onPointerUp = () => {
-    this.pointer.active = false
   }
 }

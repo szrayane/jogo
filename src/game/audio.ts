@@ -10,28 +10,37 @@ export class AudioBus {
     this.muted = muted
   }
 
-  pulse() {
-    this.blip(420, 0.07, 'sine', 0.04)
+  jump() {
+    this.sweep(280, 520, 0.1, 0.05, 'square')
   }
 
-  hit() {
-    this.blip(180, 0.05, 'square', 0.035)
+  coin() {
+    this.blip(980, 0.05, 'square', 0.045)
+    this.blip(1320, 0.08, 'square', 0.035, 0.05)
   }
 
-  kill() {
-    this.sweep(320, 140, 0.12, 0.05)
+  stomp() {
+    this.sweep(200, 90, 0.1, 0.06, 'square')
+  }
+
+  bump() {
+    this.blip(140, 0.06, 'triangle', 0.05)
+  }
+
+  power() {
+    this.sweep(360, 820, 0.22, 0.055, 'square')
   }
 
   hurt() {
-    this.sweep(220, 70, 0.16, 0.07)
+    this.sweep(260, 80, 0.18, 0.07, 'sawtooth')
   }
 
-  level() {
-    this.sweep(360, 720, 0.22, 0.06)
+  die() {
+    this.sweep(320, 70, 0.4, 0.07, 'square')
   }
 
-  over() {
-    this.sweep(300, 60, 0.45, 0.08)
+  clear() {
+    this.sweep(400, 880, 0.28, 0.05, 'triangle')
   }
 
   private ensure() {
@@ -44,27 +53,28 @@ export class AudioBus {
     return this.ctx
   }
 
-  private blip(freq: number, dur: number, type: OscillatorType, gain: number) {
+  private blip(freq: number, dur: number, type: OscillatorType, gain: number, delay = 0) {
+    const ctx = this.ensure()
+    if (!ctx || this.muted) return
+    const osc = ctx.createOscillator()
+    const amp = ctx.createGain()
+    const t = ctx.currentTime + delay
+    osc.type = type
+    osc.frequency.value = freq
+    amp.gain.setValueAtTime(gain, t)
+    amp.gain.exponentialRampToValueAtTime(0.001, t + dur)
+    osc.connect(amp)
+    amp.connect(ctx.destination)
+    osc.start(t)
+    osc.stop(t + dur)
+  }
+
+  private sweep(from: number, to: number, dur: number, gain: number, type: OscillatorType) {
     const ctx = this.ensure()
     if (!ctx || this.muted) return
     const osc = ctx.createOscillator()
     const amp = ctx.createGain()
     osc.type = type
-    osc.frequency.value = freq
-    amp.gain.setValueAtTime(gain, ctx.currentTime)
-    amp.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur)
-    osc.connect(amp)
-    amp.connect(ctx.destination)
-    osc.start()
-    osc.stop(ctx.currentTime + dur)
-  }
-
-  private sweep(from: number, to: number, dur: number, gain: number) {
-    const ctx = this.ensure()
-    if (!ctx || this.muted) return
-    const osc = ctx.createOscillator()
-    const amp = ctx.createGain()
-    osc.type = 'triangle'
     osc.frequency.setValueAtTime(from, ctx.currentTime)
     osc.frequency.exponentialRampToValueAtTime(Math.max(to, 1), ctx.currentTime + dur)
     amp.gain.setValueAtTime(gain, ctx.currentTime)
