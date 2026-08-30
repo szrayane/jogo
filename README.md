@@ -1,66 +1,269 @@
-# Aurora World
+# 🌌 Aurora World
 
-Platformer 2D no espírito de **Super Mario World**: mapa-mundo, pulo com altura variável, moedas, blocos, inimigos que tomam stomp e um castelo no fim.
+> Um platformer 2D inspirado nos clássicos jogos de plataforma, com mapa-mundo, fases, inimigos, moedas, power-ups e muita aventura.
 
-É um jogo **original**. Não usa personagem, música, fase nem asset da Nintendo — só o gênero que todo mundo reconhece.
+🎮 **Jogue diretamente no navegador** e explore os diferentes mundos de Aurora!
 
-Feito para portfólio e processo seletivo: joga no browser, funciona no celular, sobe na Vercel.
+---
 
-**Stack:** Vue 3 · TypeScript · Vite · Canvas 2D · Web Audio · localStorage
+## 🕹️ Sobre o jogo
 
-## Como jogar
+**Aurora World** é um jogo de plataforma 2D desenvolvido para navegador, inspirado na experiência dos clássicos platformers.
 
-- **Andar:** setas ou A/D
-- **Pular:** Espaço, K, Z ou seta para cima — solte cedo para pular baixo
-- **Correr:** Shift, J ou X
-- **Mapa:** esquerda/direita escolhe a fase, Enter entra
-- **Celular:** teclas A/B e setas na tela
-- **M** silencia · **Esc** pausa
+O jogador deve atravessar diferentes fases, enfrentar inimigos, coletar moedas e utilizar power-ups enquanto explora um mapa-mundo com diferentes regiões.
 
-Pise nas **bolotas** por cima. Blocos `?` soltam moedas ou a **fruta** (um hit extra). 100 moedas = 1 vida. Chegue na estrela.
+O projeto é **original** e não utiliza personagens, músicas ou assets de franquias existentes. A inspiração está apenas no gênero e nas mecânicas tradicionais dos jogos de plataforma.
 
-Mundos:
+O jogo foi desenvolvido como projeto de **portfólio e demonstração de habilidades em desenvolvimento web e game development**.
 
-1. Bosque Rosa
-2. Pico Gelado
-3. Baía Aurora
-4. Centro Neon
+---
 
-## Rodar local
+## ✨ Funcionalidades
+
+* 🗺️ **Mapa-mundo** para seleção das fases
+* 🏃 Movimentação e corrida
+* 🦘 Pulo com altura variável
+* 🪙 Sistema de moedas
+* ❓ Blocos interativos
+* 🍓 Power-up que concede um hit extra
+* 👾 Inimigos derrotados ao pular sobre eles
+* ⭐ Objetivo no final das fases
+* ❤️ Sistema de vidas
+* 💾 Salvamento do progresso
+* 🎵 Efeitos sonoros utilizando Web Audio
+* 📱 Controles adaptados para dispositivos móveis
+* 🎮 Suporte para teclado e controles virtuais
+* ⏸️ Sistema de pausa
+* 🔇 Controle de áudio
+
+---
+
+## 🌎 Mundos
+
+O jogo conta atualmente com diferentes regiões para explorar:
+
+| Mundo | Região      |
+| ----- | ----------- |
+| 🌸 1  | Bosque Rosa |
+| ❄️ 2  | Pico Gelado |
+| 🌊 3  | Baía Aurora |
+| 🌃 4  | Centro Neon |
+
+---
+
+## 🎮 Controles
+
+### 💻 Teclado
+
+| Ação            | Controles                 |
+| --------------- | ------------------------- |
+| Mover           | `←` `→` ou `A` `D`        |
+| Pular           | `Espaço`, `K`, `Z` ou `↑` |
+| Correr          | `Shift`, `J` ou `X`       |
+| Selecionar fase | `←` `→`                   |
+| Entrar na fase  | `Enter`                   |
+| Pausar          | `Esc`                     |
+| Silenciar       | `M`                       |
+
+### 📱 Celular
+
+O jogo também possui controles virtuais na tela para dispositivos móveis.
+
+---
+
+## 🪙 Mecânicas
+
+### Moedas
+
+Colete moedas espalhadas pelas fases.
+
+Ao alcançar **100 moedas**, o jogador recebe **1 vida extra**.
+
+### ❓ Blocos
+
+Os blocos `?` podem esconder recompensas, como:
+
+* 🪙 Moedas
+* 🍓 Power-ups
+
+### 👾 Inimigos
+
+Os inimigos podem ser derrotados pulando sobre eles.
+
+Tenha cuidado para não colidir com eles lateralmente!
+
+### 🍓 Power-up
+
+Alguns blocos podem liberar uma fruta que concede ao jogador **um hit extra**, aumentando suas chances de completar a fase.
+
+### ⭐ Objetivo
+
+Para completar uma fase, avance pelo cenário e alcance a **estrela no final do percurso**.
+
+---
+
+## 🧠 Física e Gameplay
+
+O projeto implementa diversas técnicas utilizadas em jogos de plataforma, incluindo:
+
+* Coyote Time
+* Jump Buffer
+* Pulo com altura variável
+* Cancelamento de pulo
+* Plataformas One-Way
+* Colisão AABB
+* Sistema de câmera
+* Tilemap
+* Entidades e colisões
+* Física de movimentação
+
+Essas mecânicas tornam os controles mais responsivos e proporcionam uma experiência de plataforma mais agradável.
+
+---
+
+## 🛠️ Tecnologias
+
+O projeto foi desenvolvido utilizando:
+
+* **Vue 3** — interface e HUD
+* **TypeScript** — lógica e programação do jogo
+* **Vite** — ambiente de desenvolvimento e build
+* **Canvas 2D** — renderização do jogo
+* **Web Audio API** — efeitos sonoros
+* **localStorage** — salvamento do progresso
+
+---
+
+## 📁 Estrutura do projeto
+
+A lógica principal do jogo está organizada dentro de `src/game`:
+
+```text
+src/
+└── game/
+    ├── engine.ts   # Loop principal, física, combate e renderização
+    ├── levels.ts   # Mapas e fases
+    ├── input.ts    # Controles de teclado e controles virtuais
+    ├── audio.ts    # Efeitos sonoros
+    └── save.ts     # Sistema de salvamento
+```
+
+Essa separação facilita a manutenção e evolução do projeto.
+
+---
+
+## 🚀 Como executar localmente
+
+### Pré-requisitos
+
+Antes de começar, você precisa ter instalado:
+
+* [Node.js](https://nodejs.org/)
+* npm
+
+### Instalação
+
+Clone o repositório:
+
+```bash
+git clone https://github.com/szrayane/jogo.git
+```
+
+Entre na pasta:
+
+```bash
+cd jogo
+```
+
+Instale as dependências:
 
 ```bash
 npm install
+```
+
+Inicie o servidor de desenvolvimento:
+
+```bash
 npm run dev
 ```
 
+Depois, acesse o endereço informado pelo Vite no terminal.
+
+---
+
+## 📦 Build de produção
+
+Para gerar a versão de produção:
+
 ```bash
 npm run build
+```
+
+Para visualizar o build localmente:
+
+```bash
 npm run preview
 ```
 
-## Deploy na Vercel
+---
 
-Importe [este repositório](https://github.com/szrayane/jogo). Framework **Vite**, build `npm run build`, pasta `dist`.
+## ☁️ Deploy
 
-## O que o projeto mostra
+O projeto pode ser publicado como uma aplicação estática na **Vercel**.
 
-- Física de platformer (coyote time, jump buffer, pulo cortado, plataformas one-way)
-- Tilemap, câmera, colisão AABB e entidades
-- Overworld com progresso salvo
-- Vue 3 na HUD/telas + loop em TypeScript
-- Controles touch e teclado
-- Deploy estático
+Configuração utilizada:
 
-Arquitetura em `src/game`:
+```text
+Framework: Vite
+Build Command: npm run build
+Output Directory: dist
+```
 
-| arquivo | papel |
-| --- | --- |
-| `engine.ts` | loop, física, combate, render |
-| `levels.ts` | mapa-mundo e as 3 fases |
-| `input.ts` | teclado e virtual pad |
-| `audio.ts` | SFX sintético |
-| `save.ts` | fases liberadas |
+---
 
-## Autora
+## 📱 Compatibilidade
 
-[Rayane Souza](https://github.com/szrayane) · fullstack · São Paulo
+O jogo foi desenvolvido pensando em diferentes dispositivos:
+
+* 💻 Desktop
+* 📱 Smartphones
+* 🌐 Navegadores modernos
+
+Além do teclado, dispositivos móveis possuem controles virtuais para interação com o jogo.
+
+---
+
+## 🎯 Objetivos do projeto
+
+Além de proporcionar uma experiência divertida, o projeto demonstra conhecimentos em:
+
+* Desenvolvimento de jogos 2D
+* TypeScript
+* Vue 3
+* Canvas API
+* Física de jogos
+* Detecção de colisões
+* Game loop
+* Sistemas de input
+* Áudio para jogos
+* Persistência de dados
+* Desenvolvimento responsivo
+* Deploy de aplicações web
+
+---
+
+## 👩‍💻 Autora
+
+**Rayane Souza**
+
+Fullstack Developer · São Paulo
+
+---
+
+## 📄 Licença
+
+Este projeto é destinado a fins de estudo, portfólio e desenvolvimento pessoal.
+
+---
+
+⭐ Se você gostou do projeto, considere deixar uma estrela no repositório!
