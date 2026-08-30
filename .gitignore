@@ -13,3 +13,10 @@ desktop.ini
 .env
 .env.*
 !.env.example
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vercel
