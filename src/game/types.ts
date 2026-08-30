@@ -24,6 +24,7 @@ export interface Player {
   airJumps: number
   dead: boolean
   win: number
+  onBuddy: boolean
 }
 
 export interface Walker {
@@ -79,12 +80,15 @@ export interface LevelDef {
   blurb: string
   time: number
   map: string[]
+  procedural?: boolean
 }
 
 export interface HudState {
   mode: Mode
   coins: number
   lives: number
+  buddyCoins: number
+  buddyLives: number
   score: number
   time: number
   levelName: string
@@ -92,6 +96,7 @@ export interface HudState {
   paused: boolean
   mapName: string
   canEnter: boolean
+  coop: boolean
 }
 
 export interface ClearStats {

@@ -53,7 +53,6 @@ onUnmounted(() => cancelAnimationFrame(frame))
       <div class="spark spark-a" />
       <div class="spark spark-b" />
       <div class="spark spark-c" />
-      <p class="kicker">um platformer original</p>
       <h1 class="title glow">Aurora<br />World</h1>
       <div class="title-rule" />
       <div class="hero-stage">
@@ -65,9 +64,26 @@ onUnmounted(() => cancelAnimationFrame(frame))
         <button class="btn wide" type="button" @click="$emit('help')">Como jogar</button>
       </div>
       <div v-if="showHelp" class="help">
-        <p>Setas ou AD andam. Espaço, K ou Z pulam. Pule de novo no ar para o pulo duplo.</p>
-        <p>Shift ou J corre. Pule em cima da caixa ? para sair moeda.</p>
-        <p>No jogo, ☰ ou Esc abre pausa, reinício e menu inicial.</p>
+        <p class="help-kicker">como jogar</p>
+        <div class="help-grid">
+          <article class="help-card">
+            <span>1 jogadora</span>
+            <p>
+              <kbd>A</kbd><kbd>D</kbd> ou <kbd>←</kbd><kbd>→</kbd> anda
+            </p>
+            <p><kbd>espaço</kbd> <kbd>K</kbd> pula · pulo duplo</p>
+          </article>
+          <article class="help-card">
+            <span>2 jogadoras</span>
+            <p>P1 <kbd>A</kbd><kbd>D</kbd><kbd>espaço</kbd></p>
+            <p>P2 <kbd>←</kbd><kbd>→</kbd><kbd>K</kbd></p>
+            <p>Sobe no ombro da outra pra impulsionar. Se uma cair, a outra puxa.</p>
+          </article>
+          <article class="help-card wide">
+            <span>na fase</span>
+            <p>Caixa <em>?</em> solta moeda.<kbd>Esc</kbd> ou ☰ pausa.</p>
+          </article>
+        </div>
       </div>
       <p v-if="save.best" class="best">melhor pontuação · {{ save.best }}</p>
       <p class="tech">Vue · TypeScript · Vite</p>

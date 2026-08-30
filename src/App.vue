@@ -27,6 +27,8 @@ const hud = ref<HudState>({
   mode: 'map',
   coins: 0,
   lives: 5,
+  buddyCoins: 0,
+  buddyLives: 5,
   score: 0,
   time: 0,
   levelName: '',
@@ -34,6 +36,7 @@ const hud = ref<HudState>({
   paused: false,
   mapName: 'Aurora',
   canEnter: false,
+  coop: false,
 })
 
 let engine: WorldEngine | null = null
@@ -70,10 +73,11 @@ function openMaps() {
   screen.value = 'maps'
 }
 
-function playLevel(index: number) {
+function playLevel(payload: { index: number; coop: boolean }) {
   if (!engine) boot()
   engine?.setSkin(skin.value)
-  engine?.enterLevel(index)
+  engine?.setCoop(payload.coop)
+  engine?.enterLevel(payload.index, payload.coop)
   engine?.start()
   pauseOpen.value = false
   screen.value = 'game'

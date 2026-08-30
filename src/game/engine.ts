@@ -1,8 +1,9 @@
 import { AudioBus } from './audio'
-import { Input } from './input'
+import { generateLevel } from './generate'
+import { Input, type Pad } from './input'
 import { LEVELS } from './levels'
 import { loadSave, writeSave } from './save'
-import { DEFAULT_SKIN, drawRaya, type Skin } from './skins'
+import { DEFAULT_SKIN, drawRaya, type OutfitId, type Skin } from './skins'
 import { TILE, VH, VW, type Block, type ClearStats, type Coin, type EngineHooks, type HudState, type Item, type Mode, type Particle, type Player, type Theme, type Walker } from './types'
 
 const GRAVITY = 980
@@ -65,6 +66,8 @@ export class WorldEngine {
   private unlocked = 0
   private lives = 5
   private coins = 0
+  private buddyLives = 5
+  private buddyCoins = 0
   private score = 0
   private timeLeft = 240
   private theme: Theme = 'forest'
@@ -75,6 +78,8 @@ export class WorldEngine {
   private rows = 0
   private grid: string[][] = []
   private player!: Player
+  private buddy: Player | null = null
+  private coop = false
   private spawn = { x: 32, y: 32 }
   private walkers: Walker[] = []
   private coinsWorld: Coin[] = []
@@ -107,8 +112,12 @@ export class WorldEngine {
     this.skin = { ...skin }
   }
 
+  setCoop(on: boolean) {
+    this.coop = on
+  }
+
   restartLevel() {
-    this.enterLevel(this.node)
+    this.enterLevel(this.node, this.coop)
   }
 
   leaveLevel() {
@@ -150,7 +159,7 @@ export class WorldEngine {
     if (!this.running) return
     const dt = Math.min((now - this.last) / 1000, 0.033)
     this.last = now
-    this.input.beginFrame()
+    this.input.beginFrame(this.coop)
     if (!this.paused) this.update(dt)
     this.draw()
     this.hudAcc += dt
@@ -166,6 +175,8 @@ export class WorldEngine {
       mode: this.mode,
       coins: this.coins,
       lives: this.lives,
+      buddyCoins: this.buddyCoins,
+      buddyLives: this.buddyLives,
       score: this.score,
       time: Math.max(0, Math.ceil(this.timeLeft)),
       levelName: this.levelName,
@@ -173,6 +184,7 @@ export class WorldEngine {
       paused: this.paused,
       mapName: this.levelName || 'Aurora',
       canEnter: false,
+      coop: this.coop,
     }
     this.hooks.onHud(hud)
   }
@@ -185,15 +197,23 @@ export class WorldEngine {
       this.player.vx = 0
       this.player.vy = Math.min(MAX_FALL, this.player.vy + GRAVITY * dt)
       this.moveY(this.player, this.player.vy * dt)
-      this.snapToGround()
+      this.snapToGround(this.player)
+      if (this.buddy) {
+        this.buddy.vx = 0
+        this.buddy.vy = Math.min(MAX_FALL, this.buddy.vy + GRAVITY * dt)
+        this.moveY(this.buddy, this.buddy.vy * dt)
+        this.snapToGround(this.buddy)
+      }
       this.followCamera(dt)
       this.updateParticles(dt)
       if (this.player.win > 0.7 && !this.clearSent) this.finishLevel()
       return
     }
-    if (this.player.dead) {
-      this.player.vy = Math.min(MAX_FALL, this.player.vy + GRAVITY * dt)
-      this.player.y += this.player.vy * dt
+    if (this.player.dead && (!this.buddy || this.buddy.dead)) {
+      for (const p of this.actors()) {
+        p.vy = Math.min(MAX_FALL, p.vy + GRAVITY * dt)
+        p.y += p.vy * dt
+      }
       this.updateParticles(dt)
       this.deathTimer -= dt
       if (this.deathTimer <= 0) this.respawn()
@@ -206,21 +226,16 @@ export class WorldEngine {
       return
     }
 
-    this.updatePlayer(dt)
+    this.updatePlayer(this.player, this.input.p1, dt)
+    if (this.buddy && !this.buddy.dead) this.updatePlayer(this.buddy, this.input.p2, dt)
+    this.resolveBuddy()
     this.updateWalkers(dt)
     this.updateItems(dt)
     this.updateParticles(dt)
     this.collideActors()
-    this.followCamera(dt)
-
-    if (this.fellInHole()) this.killPlayer()
-    if (!this.player.dead && overlaps(this.player, this.goal) && !this.clearSent) {
-      this.player.win = 0.01
-      this.player.vx = 0
-      this.player.vy = 0
-      this.snapToGround()
-      this.audio.clear()
-    }
+    this.checkFalls()
+    if (!this.player.dead) this.followCamera(dt)
+    this.checkGoal()
   }
 
   private openMap() {
@@ -230,14 +245,16 @@ export class WorldEngine {
     this.emitHud()
   }
 
-  enterLevel(index: number) {
-    const def = LEVELS[index]
-    if (!def) return
+  enterLevel(index: number, coop = this.coop) {
+    const base = LEVELS[index]
+    if (!base) return
+    const def = base.procedural ? generateLevel((Date.now() ^ (Math.random() * 1e9)) >>> 0) : base
+    this.coop = coop
     this.mode = 'level'
     this.node = index
     this.theme = def.theme
     this.levelName = def.name
-    this.levelId = def.id
+    this.levelId = base.id
     this.timeLeft = def.time
     this.clearSent = false
     this.particles = []
@@ -272,7 +289,7 @@ export class WorldEngine {
           this.walkers.push({ x, y: y + 4, w: 14, h: 12, dir: -1, alive: true, squash: 0 })
           this.grid[ty][tx] = '.'
         } else if (cell === 'o') {
-          this.coinsWorld.push({ x: x + 4, y: y + 3, taken: false, pop: 0 })
+          this.coinsWorld.push({ x: x + 2, y: y + 6, taken: false, pop: 0 })
           this.grid[ty][tx] = '.'
         } else if (cell === 'g') {
           this.goal = { x: x + 2, y: y - 20, w: 10, h: 36 }
@@ -285,10 +302,10 @@ export class WorldEngine {
     this.resetPlayer()
   }
 
-  private resetPlayer() {
-    this.player = {
-      x: this.spawn.x,
-      y: this.spawn.y,
+  private makeActor(x: number, y: number): Player {
+    return {
+      x,
+      y,
       w: 12,
       h: 16,
       vx: 0,
@@ -303,31 +320,42 @@ export class WorldEngine {
       airJumps: 1,
       dead: false,
       win: 0,
+      onBuddy: false,
     }
   }
 
-  private sizePlayer() {
-    const was = this.player.h
-    this.player.w = 12
-    this.player.h = this.player.big ? 22 : 16
-    this.player.y += was - this.player.h
+  private resetPlayer() {
+    this.player = this.makeActor(this.spawn.x, this.spawn.y)
+    this.buddy = this.coop ? this.makeActor(this.spawn.x + 14, this.spawn.y) : null
   }
 
-  private updatePlayer(dt: number) {
-    const p = this.player
-    const wet = this.inWater()
+  private actors() {
+    return this.buddy ? [this.player, this.buddy] : [this.player]
+  }
+
+  private sizePlayer(p = this.player) {
+    const was = p.h
+    p.w = 12
+    p.h = p.big ? 22 : 16
+    p.y += was - p.h
+  }
+
+  private updatePlayer(p: Player, pad: Pad, dt: number) {
+    if (p.dead) return
+    const wet = this.inWater(p)
     const icy = this.theme === 'ice'
+    const fromBuddy = p.onBuddy
     p.invuln = Math.max(0, p.invuln - dt)
     p.coyote = p.grounded ? COYOTE : Math.max(0, p.coyote - dt)
-    if (this.input.jump) p.jumpBuf = BUFFER
+    if (pad.jump) p.jumpBuf = BUFFER
     else p.jumpBuf = Math.max(0, p.jumpBuf - dt)
 
-    const max = (this.input.run ? RUN : WALK) * (wet ? 0.78 : 1)
+    const max = (pad.run ? RUN : WALK) * (wet ? 0.78 : 1)
     const accel = p.grounded ? (icy ? 260 : ACCEL) : AIR_ACCEL
-    if (this.input.left) {
+    if (pad.left) {
       p.vx -= accel * dt
       p.facing = -1
-    } else if (this.input.right) {
+    } else if (pad.right) {
       p.vx += accel * dt
       p.facing = 1
     } else if (p.grounded) {
@@ -338,7 +366,9 @@ export class WorldEngine {
     p.vx = clamp(p.vx, -max, max)
 
     if (p.jumpBuf > 0 && p.coyote > 0) {
-      p.vy = wet ? JUMP * 0.72 : JUMP
+      const boost = fromBuddy ? 1.38 : 1
+      p.vy = (wet ? JUMP * 0.72 : JUMP) * boost
+      p.onBuddy = false
       p.grounded = false
       p.coyote = 0
       p.jumpBuf = 0
@@ -353,7 +383,7 @@ export class WorldEngine {
       this.audio.jump()
       this.puff(p.x + p.w / 2, p.y + p.h, '#ffe08a', 6)
     }
-    if (p.jumping && !this.input.jumpHeld && p.vy < 0) {
+    if (p.jumping && !pad.jumpHeld && p.vy < 0) {
       p.vy *= JUMP_CUT
       p.jumping = false
     }
@@ -371,25 +401,23 @@ export class WorldEngine {
       this.moveX(p, dx / steps)
       this.moveY(p, dy / steps)
     }
-    this.snapToGround()
+    this.snapToGround(p)
     if (p.grounded) {
       p.airJumps = 1
-      this.bumpTilesUnderPlayer()
+      this.bumpTilesUnder(p)
     }
     if (goingUp) {
       const hx = Math.floor((p.x + p.w / 2) / TILE)
       const hy = Math.floor((p.y - 1) / TILE)
-      this.bumpAt(hx, hy)
+      this.bumpAt(hx, hy, p)
     }
   }
 
-  private inWater() {
-    const p = this.player
+  private inWater(p = this.player) {
     return isWater(this.cell(Math.floor((p.x + p.w / 2) / TILE), Math.floor((p.y + p.h * 0.6) / TILE)))
   }
 
-  private snapToGround() {
-    const p = this.player
+  private snapToGround(p = this.player) {
     if (p.vy < -16) return
     const probe = p.y + p.h + 3
     if (this.standable(p.x + 3, probe, p.y + p.h) || this.standable(p.x + p.w - 3, probe, p.y + p.h)) {
@@ -408,12 +436,11 @@ export class WorldEngine {
     return isOneWay(cell) && prevBottom <= ty * TILE + 3
   }
 
-  private bumpTilesUnderPlayer() {
-    const p = this.player
+  private bumpTilesUnder(p: Player) {
     const ty = Math.floor((p.y + p.h + 1) / TILE)
     const x0 = Math.floor((p.x + 2) / TILE)
     const x1 = Math.floor((p.x + p.w - 2) / TILE)
-    for (let tx = x0; tx <= x1; tx++) this.bumpAt(tx, ty)
+    for (let tx = x0; tx <= x1; tx++) this.bumpAt(tx, ty, p)
   }
 
   private moveX(body: { x: number; y: number; w: number; h: number; vx?: number }, dx: number) {
@@ -437,18 +464,18 @@ export class WorldEngine {
       if (dy > 0) {
         body.y = Math.min(body.y, hit.y - body.h)
         if (body.vy !== undefined) body.vy = 0
-        if (body === this.player) this.player.grounded = true
+        if (this.isActor(body)) body.grounded = true
       } else {
         const overlapL = body.x + body.w - hit.x
         const overlapR = hit.x + hit.w - body.x
-        if (body === this.player && overlapL > 0 && overlapL < 5) {
+        if (this.isActor(body) && overlapL > 0 && overlapL < 5) {
           body.x = hit.x - body.w
-        } else if (body === this.player && overlapR > 0 && overlapR < 5) {
+        } else if (this.isActor(body) && overlapR > 0 && overlapR < 5) {
           body.x = hit.x + hit.w
         } else {
           body.y = Math.max(body.y, hit.y + hit.h)
           if (body.vy !== undefined) body.vy = 0
-          if (body === this.player) this.bumpAt(hit.tx, hit.ty)
+          if (this.isActor(body)) this.bumpAt(hit.tx, hit.ty, body)
         }
       }
     }
@@ -478,7 +505,7 @@ export class WorldEngine {
     return this.grid[ty][tx]
   }
 
-  private bumpAt(tx: number, ty: number) {
+  private bumpAt(tx: number, ty: number, who?: Player) {
     const block = this.blocks.find((item) => item.tx === tx && item.ty === ty)
     if (!block || block.used) return
     block.used = true
@@ -500,17 +527,22 @@ export class WorldEngine {
       this.audio.power()
       this.puff(tx * TILE + 8, ty * TILE, '#ff91a4', 8)
     } else {
-      this.spawnCoinPop(tx * TILE + 4, ty * TILE - 6)
+      this.spawnCoinPop(tx * TILE + 4, ty * TILE - 6, who)
     }
   }
 
-  private spawnCoinPop(x: number, y: number) {
-    this.coins += 1
+  private spawnCoinPop(x: number, y: number, who?: Player) {
+    const buddy = who === this.buddy
+    if (buddy) this.buddyCoins += 1
+    else this.coins += 1
     this.score += 100
     this.audio.coin()
     this.pops.push({ x, y, vy: -70, life: 0.85 })
     this.puff(x + 4, y + 4, '#ffd24a', 8)
-    if (this.coins >= 100) {
+    if (buddy && this.buddyCoins >= 100) {
+      this.buddyCoins -= 100
+      this.buddyLives += 1
+    } else if (!buddy && this.coins >= 100) {
       this.coins -= 100
       this.lives += 1
     }
@@ -541,11 +573,12 @@ export class WorldEngine {
       item.vy += GRAVITY * dt
       this.moveX(item, item.vx * dt)
       this.moveY(item, item.vy * dt)
-      if (overlaps(this.player, item)) {
+      const who = this.actors().find((actor) => !actor.dead && overlaps(actor, item))
+      if (who) {
         this.items.splice(i, 1)
-        if (!this.player.big) {
-          this.player.big = true
-          this.sizePlayer()
+        if (!who.big) {
+          who.big = true
+          this.sizePlayer(who)
         }
         this.score += 200
         this.audio.power()
@@ -575,79 +608,183 @@ export class WorldEngine {
     for (const block of this.blocks) block.bump = Math.max(0, block.bump - dt * 6)
   }
 
+  private isActor(body: object): body is Player {
+    return body === this.player || body === this.buddy
+  }
+
+  private resolveBuddy() {
+    const a = this.player
+    const b = this.buddy
+    if (!b || a.dead || b.dead || this.fallingOff(a) || this.fallingOff(b)) return
+    a.onBuddy = false
+    b.onBuddy = false
+    this.tryStandOn(a, b)
+    this.tryStandOn(b, a)
+    if (a.onBuddy && b.vy < -40) {
+      a.vy = JUMP * 1.12
+      a.grounded = false
+      a.onBuddy = false
+    } else if (b.onBuddy && a.vy < -40) {
+      b.vy = JUMP * 1.12
+      b.grounded = false
+      b.onBuddy = false
+    }
+  }
+
+  private tryStandOn(top: Player, base: Player) {
+    if (top.vy < -20) return
+    const overlapX = Math.min(top.x + top.w, base.x + base.w) - Math.max(top.x, base.x)
+    if (overlapX < 4) return
+    const topBottom = top.y + top.h
+    if (topBottom < base.y - 4 || topBottom > base.y + 8) return
+    top.y = base.y - top.h
+    top.vy = 0
+    top.grounded = true
+    top.onBuddy = true
+    top.airJumps = 1
+  }
+
   private collideActors() {
-    const p = this.player
-    for (const coin of this.coinsWorld) {
-      if (!coin.taken && overlaps(p, { x: coin.x, y: coin.y, w: 10, h: 12 })) {
-        coin.taken = true
-        coin.pop = 0
-        this.spawnCoinPop(coin.x, coin.y)
+    for (const p of this.actors()) {
+      if (p.dead) continue
+      for (const coin of this.coinsWorld) {
+        if (!coin.taken && overlaps(p, { x: coin.x - 2, y: coin.y - 6, w: 18, h: 20 })) {
+          coin.taken = true
+          coin.pop = 0
+          this.spawnCoinPop(coin.x, coin.y, p)
+        }
       }
-    }
 
-    const feet = { x: p.x + 2, y: p.y + p.h - 4, w: p.w - 4, h: 6 }
-    for (const enemy of this.walkers) {
-      if (!enemy.alive) continue
-      if (!overlaps(p, enemy)) continue
-      if (p.vy > 40 && feet.y <= enemy.y + 6) {
-        enemy.alive = false
-        enemy.squash = 0.35
-        p.vy = JUMP * 0.62
-        p.grounded = false
-        p.invuln = 0.12
-        this.score += 200
-        this.audio.stomp()
-        this.puff(enemy.x + 7, enemy.y + 6, '#d8a06a', 8)
-      } else if (p.invuln <= 0) {
-        this.hurt()
+      const feet = { x: p.x + 2, y: p.y + p.h - 4, w: p.w - 4, h: 6 }
+      for (const enemy of this.walkers) {
+        if (!enemy.alive) continue
+        if (!overlaps(p, enemy)) continue
+        if (p.vy > 40 && feet.y <= enemy.y + 6) {
+          enemy.alive = false
+          enemy.squash = 0.35
+          p.vy = JUMP * 0.62
+          p.grounded = false
+          p.invuln = 0.12
+          this.score += 200
+          this.audio.stomp()
+          this.puff(enemy.x + 7, enemy.y + 6, '#d8a06a', 8)
+        } else if (p.invuln <= 0) {
+          this.hurt(p)
+        }
       }
-    }
 
-    const x0 = Math.floor(p.x / TILE)
-    const y0 = Math.floor(p.y / TILE)
-    const x1 = Math.floor((p.x + p.w - 1) / TILE)
-    const y1 = Math.floor((p.y + p.h - 1) / TILE)
-    for (let ty = y0; ty <= y1; ty++) {
-      for (let tx = x0; tx <= x1; tx++) {
-        if (isHazard(this.cell(tx, ty))) this.killPlayer()
+      const x0 = Math.floor(p.x / TILE)
+      const y0 = Math.floor(p.y / TILE)
+      const x1 = Math.floor((p.x + p.w - 1) / TILE)
+      const y1 = Math.floor((p.y + p.h - 1) / TILE)
+      for (let ty = y0; ty <= y1; ty++) {
+        for (let tx = x0; tx <= x1; tx++) {
+          if (isHazard(this.cell(tx, ty))) this.rescueOrKill(p)
+        }
       }
     }
   }
 
-  private hurt() {
-    if (this.player.big) {
-      this.player.big = false
-      this.sizePlayer()
-      this.player.invuln = 1.4
+  private hurt(p: Player) {
+    if (p.big) {
+      p.big = false
+      this.sizePlayer(p)
+      p.invuln = 1.4
       this.audio.hurt()
       return
     }
-    this.killPlayer()
+    this.rescueOrKill(p)
   }
 
-  private fellInHole() {
-    return !this.player.dead && this.player.y > this.rows * TILE + 20
+  private inPit(p: Player) {
+    return p.y > this.rows * TILE
   }
 
-  private killPlayer() {
-    if (this.player.dead) return
-    this.player.dead = true
-    this.player.vy = -80
+  private fallingOff(p: Player) {
+    return !p.dead && (this.inPit(p) || (!p.grounded && p.vy > 50 && p.y + p.h > (this.rows - 1) * TILE))
+  }
+
+  private canRescueTo(p: Player) {
+    return !p.dead && p.grounded && !this.fallingOff(p) && p.y < this.rows * TILE - 16
+  }
+
+  private checkFalls() {
+    const living = this.actors().filter((p) => !p.dead)
+    if (!living.length) return
+    if (living.length > 1 && living.every((p) => this.fallingOff(p))) {
+      this.killPlayer(true)
+      return
+    }
+    const fallen = living.filter((p) => p.y > this.rows * TILE + 12)
+    if (!fallen.length) return
+    const safe = living.find((p) => this.canRescueTo(p))
+    if (safe) {
+      for (const p of fallen) this.rescue(p, safe)
+      return
+    }
+    this.killPlayer(true)
+  }
+
+  private checkGoal() {
+    if (this.clearSent || this.player.dead) return
+    const at = (p: Player) => !p.dead && overlaps(p, this.goal)
+    const ready = this.coop && this.buddy ? at(this.player) && at(this.buddy) : at(this.player)
+    if (!ready) return
+    this.player.win = 0.01
+    this.player.vx = 0
+    this.player.vy = 0
+    this.snapToGround(this.player)
+    if (this.buddy) {
+      this.buddy.vx = 0
+      this.buddy.vy = 0
+      this.snapToGround(this.buddy)
+    }
+    this.audio.clear()
+  }
+
+  private rescueOrKill(p: Player) {
+    const other = this.actors().find((actor) => actor !== p && this.canRescueTo(actor))
+    if (other) {
+      this.rescue(p, other)
+      return
+    }
+    this.killPlayer(false)
+  }
+
+  private rescue(p: Player, safe: Player) {
+    p.x = safe.x
+    p.y = safe.y - p.h - 2
+    p.vx = 0
+    p.vy = 0
+    p.invuln = 1.1
+    this.puff(p.x + 6, p.y + 8, '#9ad7ff', 10)
+  }
+
+  private killPlayer(fromPit = false) {
+    if (this.player.dead && (!this.buddy || this.buddy.dead)) return
+    for (const p of this.actors()) {
+      p.dead = true
+      p.vx = 0
+      p.vy = fromPit ? Math.max(p.vy, 80) : -80
+    }
     this.lives -= 1
-    this.deathTimer = 0.7
+    if (this.coop) this.buddyLives -= 1
+    this.deathTimer = fromPit ? 0.28 : 0.7
     this.audio.die()
     this.puff(this.player.x + 6, this.player.y + 8, '#ff91a4', 16)
   }
 
   private respawn() {
-    if (this.lives <= 0) {
+    if (this.lives <= 0 || (this.coop && this.buddyLives <= 0)) {
       this.hooks.onGameOver(this.score)
       this.lives = 5
       this.coins = 0
+      this.buddyLives = 5
+      this.buddyCoins = 0
       this.openMap()
       return
     }
-    this.enterLevel(this.node)
+    this.enterLevel(this.node, this.coop)
   }
 
   private finishLevel() {
@@ -664,22 +801,27 @@ export class WorldEngine {
     })
     const timeLeft = Math.max(0, Math.floor(this.timeLeft))
     this.score += timeLeft * 10
+    const story = LEVELS.filter((level) => !level.procedural)
+    const lastStory = story[story.length - 1]
     const stats: ClearStats = {
       levelId: this.levelId,
       levelName: this.levelName,
-      coins: this.coins,
+      coins: this.coins + this.buddyCoins,
       score: this.score,
       timeLeft,
-      last: next >= LEVELS.length,
+      last: this.levelId === lastStory?.id,
     }
     if (stats.last) this.hooks.onWin(this.score)
     else this.hooks.onClear(stats)
   }
 
   private followCamera(dt: number) {
-    const look = this.player.facing * 28
-    const targetX = this.player.x - VW * 0.38 + look
-    const targetY = this.player.y - VH * 0.55
+    const focus = this.buddy && !this.buddy.dead
+      ? { x: (this.player.x + this.buddy.x) / 2, y: (this.player.y + this.buddy.y) / 2, facing: this.player.facing }
+      : this.player
+    const look = focus.facing * 28
+    const targetX = focus.x - VW * 0.38 + look
+    const targetY = focus.y - VH * 0.55
     this.camX += (targetX - this.camX) * Math.min(1, dt * 6)
     this.camY += (targetY - this.camY) * Math.min(1, dt * 5)
     this.camX = clamp(this.camX, 0, Math.max(0, this.cols * TILE - VW))
@@ -862,27 +1004,44 @@ export class WorldEngine {
     this.drawGoal()
     for (const coin of this.coinsWorld) {
       if (coin.taken) continue
-      this.drawCoin(coin.x - this.camX, coin.y - this.camY + Math.sin(this.tickTime * 6 + coin.x) * 1.6, 1)
+      this.drawCoin(coin.x - this.camX, coin.y - this.camY, 1, coin.x)
     }
     for (const pop of this.pops) {
-      this.drawCoin(pop.x - this.camX, pop.y - this.camY, Math.max(0.3, pop.life * 1.4))
+      this.drawCoin(pop.x - this.camX, pop.y - this.camY, Math.max(0.3, pop.life * 1.4), pop.x)
     }
     for (const item of this.items) this.drawFruit(item.x - this.camX, item.y - this.camY)
     for (const enemy of this.walkers) {
       if (!enemy.alive && enemy.squash <= 0) continue
       this.drawWalker(enemy)
     }
-    if (!this.player.dead || Math.sin(this.tickTime * 30) > 0) {
-      if (this.player.invuln <= 0 || Math.floor(this.tickTime * 16) % 2 === 0) {
-        drawRaya(this.ctx, this.player.x - this.camX, this.player.y - this.camY, this.player.facing, this.player.big, this.tickTime, this.player.grounded && Math.abs(this.player.vx) > 20, this.skin)
-      }
-    }
+    this.drawActor(this.player, this.skin)
+    if (this.buddy) this.drawActor(this.buddy, this.buddySkin())
     for (const particle of this.particles) {
       ctx.globalAlpha = particle.life / particle.max
       ctx.fillStyle = particle.color
       ctx.fillRect(particle.x - this.camX, particle.y - this.camY, particle.size, particle.size)
     }
     ctx.globalAlpha = 1
+  }
+
+  private buddySkin(): Skin {
+    const outfit: OutfitId = this.skin.outfit === 'azul' ? 'rosa' : 'azul'
+    return { ...this.skin, outfit }
+  }
+
+  private drawActor(p: Player, skin: Skin) {
+    if (p.dead && Math.sin(this.tickTime * 30) <= 0) return
+    if (p.invuln > 0 && Math.floor(this.tickTime * 16) % 2 !== 0) return
+    drawRaya(
+      this.ctx,
+      p.x - this.camX,
+      p.y - this.camY,
+      p.facing,
+      p.big,
+      this.tickTime,
+      p.grounded && Math.abs(p.vx) > 20,
+      skin,
+    )
   }
 
   private drawSky() {
@@ -1235,22 +1394,60 @@ export class WorldEngine {
     }
   }
 
-  private drawCoin(x: number, y: number, scale = 1) {
+  private drawCoin(x: number, y: number, scale = 1, phase = 0) {
     const { ctx } = this
-    const w = 5 * scale
-    const h = 7 * scale
-    ctx.fillStyle = '#e0a21a'
+    const bob = Math.sin(this.tickTime * 5.2 + phase * 0.08) * 1.4
+    const spin = 0.22 + Math.abs(Math.sin(this.tickTime * 4.4 + phase * 0.12)) * 0.78
+    const cx = x + 6 * scale
+    const cy = y + 7 * scale + bob
+    const rx = 5.4 * scale * spin
+    const ry = 6.8 * scale
+
+    ctx.fillStyle = 'rgba(255, 210, 74, 0.28)'
     ctx.beginPath()
-    ctx.ellipse(x + w, y + h, w + 1, h + 1, 0, 0, Math.PI * 2)
+    ctx.ellipse(cx, cy + 1, rx + 3.2, ry + 2.2, 0, 0, Math.PI * 2)
     ctx.fill()
-    ctx.fillStyle = '#ffd24a'
+
+    ctx.fillStyle = '#a86a12'
     ctx.beginPath()
-    ctx.ellipse(x + w, y + h, w, h, 0, 0, Math.PI * 2)
+    ctx.ellipse(cx, cy + 0.6, rx + 1.15, ry + 0.9, 0, 0, Math.PI * 2)
     ctx.fill()
-    ctx.fillStyle = '#fff3a8'
+
+    const face = ctx.createRadialGradient(cx - rx * 0.35, cy - ry * 0.4, 0.4, cx, cy, ry)
+    face.addColorStop(0, '#fff6c4')
+    face.addColorStop(0.35, '#ffd24a')
+    face.addColorStop(0.78, '#f0a028')
+    face.addColorStop(1, '#c47816')
+    ctx.fillStyle = face
     ctx.beginPath()
-    ctx.ellipse(x + w - 1, y + h - 2, w * 0.28, h * 0.28, 0, 0, Math.PI * 2)
+    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2)
     ctx.fill()
+
+    if (spin > 0.42) {
+      ctx.strokeStyle = 'rgba(176, 96, 18, 0.45)'
+      ctx.lineWidth = Math.max(0.7, scale)
+      ctx.beginPath()
+      ctx.ellipse(cx, cy, rx * 0.58, ry * 0.58, 0, 0, Math.PI * 2)
+      ctx.stroke()
+
+      ctx.fillStyle = '#fff8d8'
+      const arm = 1.6 * scale * spin
+      ctx.beginPath()
+      ctx.moveTo(cx, cy - arm * 1.6)
+      ctx.lineTo(cx + arm * 0.45, cy)
+      ctx.lineTo(cx, cy + arm * 1.6)
+      ctx.lineTo(cx - arm * 0.45, cy)
+      ctx.closePath()
+      ctx.fill()
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)'
+      ctx.beginPath()
+      ctx.ellipse(cx - rx * 0.28, cy - ry * 0.32, rx * 0.18, ry * 0.14, -0.4, 0, Math.PI * 2)
+      ctx.fill()
+    } else {
+      ctx.fillStyle = '#ffe08a'
+      ctx.fillRect(cx - 0.6 * scale, cy - ry * 0.7, 1.2 * scale, ry * 1.4)
+    }
   }
 
   private drawFruit(x: number, y: number) {

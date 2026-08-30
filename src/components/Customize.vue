@@ -57,7 +57,7 @@ onUnmounted(() => cancelAnimationFrame(frame))
 <template>
   <div class="overlay scroll">
     <section class="panel wide">
-      <p class="brand">visual da raya</p>
+      <p class="brand">visual da aurora</p>
       <h2 class="title small">Looks</h2>
       <div class="looks">
         <canvas ref="canvasRef" width="160" height="160" class="look-canvas" />
